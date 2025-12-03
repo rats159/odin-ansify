@@ -1,7 +1,7 @@
 // This is the demo.odin file from https://github.com/odin-lang/Odin/blob/master/examples/demo/demo.odin
 #+vet !using-stmt !using-param
 #+feature dynamic-literals
-package main
+package demo
 
 import "core:fmt"
 import "core:mem"
