@@ -89,26 +89,33 @@ main :: proc() {
 		ast.walk(v, decl)
 	}
 
-	// `do`, `#partial`, and `else` (on when) tokens are never stored, so we need a second pass to find them
-	secondary_matcher :=
-		regex.create_iterator(text, "\\s(?:do|#partial|else)\\s") or_else panic(
-			"regex creation failed",
-		)
+	tok := tokenizer.Tokenizer{}
+	tokenizer.init(&tok, text, "")
 
-	// comments
-	comment_matcher :=
-		regex.create_iterator(text, `\/\*(?:\s|\S)*?\*\/|\/\/[^\n]*`) or_else panic(
-			"regex creation failed",
-		)
-
-	for match, _ in regex.match_iterator(&secondary_matcher) {
-		append(&injections, Injection{type = .Keyword, at = match.pos[0][0], start = true})
-		append(&injections, Injection{type = .Keyword, at = match.pos[0][1], start = false})
-	}
-
-	for match, _ in regex.match_iterator(&comment_matcher) {
-		append(&injections, Injection{type = .Comment, at = match.pos[0][0], start = true})
-		append(&injections, Injection{type = .Comment, at = match.pos[0][1], start = false})
+	// Second (dumber) pass over tokens for things that weren't caught
+	//   This is mainly for info not stored inside the AST such as `do` tokens
+	for {
+		tk := tokenizer.scan(&tok)
+		if tk.kind == .EOF {
+			break
+		}
+		#partial switch tk.kind {
+		case .Else, .Do:
+			write_token(&injections, tk, .Keyword)
+		case .Comment:
+			write_token(&injections, tk, .Comment)
+		case .Hash:
+			name := tokenizer.scan(&tok)
+			assert(name.kind == .Ident, "Directives should start with a #")
+			write_token(&injections, tk, .Directive)
+			write_token(&injections, name, .Directive)
+		case .File_Tag:
+			write_token(&injections, tk, .Directive)
+		case .Integer, .Float, .Imag:
+			write_token(&injections, tk, .Number)
+		case .String:
+			write_token(&injections, tk, .String)
+		}
 	}
 
 	slice.sort_by(injections[:], proc(a, b: Injection) -> bool {
