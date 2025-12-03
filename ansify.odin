@@ -222,7 +222,12 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	case ^ast.Value_Decl:
 		if len(type.values) != 0 do for name in type.names {
 			#partial switch t2 in type.values[0].derived_expr {
-			case ^ast.Proc_Lit, ^ast.Proc_Group:
+			case ^ast.Proc_Lit:
+				write_node(injections, name, .Procedure)
+				if t2.where_token != {} {
+					write_token(injections, t2.where_token, .Keyword)
+				}
+			case ^ast.Proc_Group:
 				write_node(injections, name, .Procedure)
 			case ^ast.Struct_Type, ^ast.Enum_Type, ^ast.Union_Type, ^ast.Distinct_Type:
 				write_type(injections, type.values[0])
@@ -244,7 +249,7 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	case ^ast.Or_Return_Expr:
 		write_token(injections, type.token, .Keyword)
 	case ^ast.Proc_Lit:
-		write_pos(injections, type.pos.offset, len("proc"), .Keyword)
+		write_type(injections, type.type)
 	case ^ast.Basic_Lit:
 		#partial switch type.tok.kind {
 		case .Integer, .Float, .Imag:
@@ -495,6 +500,8 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 		for field in t.fields {
 			write_node(injections, field, .Constant)
 		}
+	case ^ast.Proc_Type:
+		write_pos(injections, t.pos.offset, len("proc"), .Keyword)
 	case:
 		unimplemented(fmt.aprint("Type type", expr.derived))
 
