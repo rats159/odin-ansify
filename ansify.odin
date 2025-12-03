@@ -17,27 +17,27 @@ Injection :: struct {
 }
 
 Type :: enum {
-	NONE,
-	KEYWORD,
-	CONSTANT,
-	STRING,
-	PROCEDURE,
-	COMMENT,
-	INTEGER,
-	TYPE,
-	DIRECTIVE,
+	None,
+	Keyword,
+	Constant,
+	String,
+	Procedure,
+	Comment,
+	Number,
+	Type,
+	Directive,
 }
 
 colors := [Type]string {
-	.NONE      = `[0m`,
-	.KEYWORD   = `[31m`,
-	.CONSTANT  = `[35m`,
-	.STRING    = `[32m`,
-	.PROCEDURE = `[34m`,
-	.COMMENT   = `[30m`,
-	.INTEGER   = `[36m`,
-	.TYPE      = `[33m`,
-	.DIRECTIVE = `[31m`,
+	.None      = `[0m`,
+	.Keyword   = `[31m`,
+	.Constant  = `[35m`,
+	.String    = `[32m`,
+	.Procedure = `[34m`,
+	.Comment   = `[30m`,
+	.Number    = `[36m`,
+	.Type      = `[33m`,
+	.Directive = `[31m`, // Same as keywords, but you can change it if you want
 }
 
 main :: proc() {
@@ -70,9 +70,11 @@ main :: proc() {
 		ast.walk(v, decl)
 	}
 
-	// `do` and `#partial` tokens are never stored, so we need a second pass to find them
+	// `do`, `#partial`, and `else` (on when) tokens are never stored, so we need a second pass to find them
 	secondary_matcher :=
-		regex.create_iterator(text, "\\s(?:do|#partial|else)\\s") or_else panic("regex creation failed")
+		regex.create_iterator(text, "\\s(?:do|#partial|else)\\s") or_else panic(
+			"regex creation failed",
+		)
 
 	// comments
 	comment_matcher :=
@@ -80,13 +82,13 @@ main :: proc() {
 			"regex creation failed",
 		)
 	for match, _ in regex.match_iterator(&secondary_matcher) {
-		append(&injections, Injection{type = .KEYWORD, at = match.pos[0][0], start = true})
-		append(&injections, Injection{type = .KEYWORD, at = match.pos[0][1], start = false})
+		append(&injections, Injection{type = .Keyword, at = match.pos[0][0], start = true})
+		append(&injections, Injection{type = .Keyword, at = match.pos[0][1], start = false})
 	}
 
 	for match, _ in regex.match_iterator(&comment_matcher) {
-		append(&injections, Injection{type = .COMMENT, at = match.pos[0][0], start = true})
-		append(&injections, Injection{type = .COMMENT, at = match.pos[0][1], start = false})
+		append(&injections, Injection{type = .Comment, at = match.pos[0][0], start = true})
+		append(&injections, Injection{type = .Comment, at = match.pos[0][1], start = false})
 	}
 
 	slice.sort_by(injections[:], proc(a, b: Injection) -> bool {
@@ -95,7 +97,7 @@ main :: proc() {
 
 	flattened_injections: [dynamic]Injection
 	type_stack: [dynamic]Type
-	append(&type_stack, Type.NONE)
+	append(&type_stack, Type.None)
 
 	for inj in injections {
 		if inj.start {
@@ -165,33 +167,33 @@ main :: proc() {
 parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	#partial switch type in node.derived {
 	case ^ast.Package_Decl:
-		write_token(injections, type.token, .KEYWORD)
+		write_token(injections, type.token, .Keyword)
 	case ^ast.Import_Decl:
-		write_token(injections, type.import_tok, .KEYWORD)
-		write_token(injections, type.relpath, .STRING)
+		write_token(injections, type.import_tok, .Keyword)
+		write_token(injections, type.relpath, .String)
 	case ^ast.Foreign_Import_Decl:
-		write_token(injections, type.foreign_tok, .KEYWORD)
-		write_token(injections, type.import_tok, .KEYWORD)
+		write_token(injections, type.foreign_tok, .Keyword)
+		write_token(injections, type.import_tok, .Keyword)
 		for path in type.fullpaths {
-			write_node(injections, path, .STRING)
+			write_node(injections, path, .String)
 		}
 	case ^ast.Foreign_Block_Decl:
-		write_token(injections, type.tok, .KEYWORD)
+		write_token(injections, type.tok, .Keyword)
 	case ^ast.Comment_Group:
 		for comment in type.list {
-			write_token(injections, comment, .COMMENT)
+			write_token(injections, comment, .Comment)
 		}
 	case ^ast.Value_Decl:
 		if len(type.values) != 0 do for name in type.names {
 			#partial switch t2 in type.values[0].derived_expr {
 			case ^ast.Proc_Lit, ^ast.Proc_Group:
-				write_node(injections, name, .PROCEDURE)
+				write_node(injections, name, .Procedure)
 			case ^ast.Struct_Type, ^ast.Enum_Type, ^ast.Union_Type, ^ast.Distinct_Type:
 				write_type(injections, type.values[0])
-				write_node(injections, name, .TYPE)
+				write_node(injections, name, .Type)
 			case:
 				if !type.is_mutable {
-					write_node(injections, name, .CONSTANT)
+					write_node(injections, name, .Constant)
 				}
 			}
 		}
@@ -200,50 +202,46 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 			write_type(injections, type.type)
 		}
 	case ^ast.Or_Else_Expr:
-		write_token(injections, type.token, .KEYWORD)
+		write_token(injections, type.token, .Keyword)
 	case ^ast.Or_Branch_Expr:
-		write_token(injections, type.token, .KEYWORD)
+		write_token(injections, type.token, .Keyword)
 	case ^ast.Or_Return_Expr:
-		write_token(injections, type.token, .KEYWORD)
-	// case ^ast.Struct_Type:
-	// 	write_pos(injections, type.pos.offset, len("struct"), .KEYWORD)
-	case ^ast.Enum_Type:
-
+		write_token(injections, type.token, .Keyword)
 	case ^ast.Proc_Lit:
-		write_pos(injections, type.pos.offset, len("proc"), .KEYWORD)
+		write_pos(injections, type.pos.offset, len("proc"), .Keyword)
 	case ^ast.Basic_Lit:
 		#partial switch type.tok.kind {
 		case .Integer, .Float, .Imag:
-			write_token(injections, type.tok, .INTEGER)
+			write_token(injections, type.tok, .Number)
 		case .String, .Rune:
-			write_token(injections, type.tok, .STRING)
+			write_token(injections, type.tok, .String)
 		case:
 			unimplemented(fmt.aprint("Literal type", type.tok))
 		}
 	case ^ast.If_Stmt:
-		write_pos(injections, type.if_pos.offset, len("if"), .KEYWORD)
+		write_pos(injections, type.if_pos.offset, len("if"), .Keyword)
 		if type.else_stmt != nil {
-			write_pos(injections, type.else_pos.offset, len("else"), .KEYWORD)
+			write_pos(injections, type.else_pos.offset, len("else"), .Keyword)
 		}
 
 	case ^ast.When_Stmt:
-		write_pos(injections, type.when_pos.offset, len("when"), .KEYWORD)
+		write_pos(injections, type.when_pos.offset, len("when"), .Keyword)
 	case ^ast.Ternary_If_Expr:
-		write_token(injections, type.op1, .KEYWORD)
-		write_token(injections, type.op2, .KEYWORD)
+		write_token(injections, type.op1, .Keyword)
+		write_token(injections, type.op2, .Keyword)
 
 	case ^ast.Ternary_When_Expr:
-		write_token(injections, type.op1, .KEYWORD)
-		write_token(injections, type.op2, .KEYWORD)
+		write_token(injections, type.op1, .Keyword)
+		write_token(injections, type.op2, .Keyword)
 	case ^ast.Return_Stmt:
-		write_pos(injections, type.pos.offset, len("return"), .KEYWORD)
+		write_pos(injections, type.pos.offset, len("return"), .Keyword)
 	case ^ast.Type_Switch_Stmt:
-		write_pos(injections, type.switch_pos.offset, len("switch"), .KEYWORD)
+		write_pos(injections, type.switch_pos.offset, len("switch"), .Keyword)
 		write_pos(
 			injections,
 			type.tag.derived_stmt.(^ast.Assign_Stmt).op.pos.offset,
 			len("in"),
-			.KEYWORD,
+			.Keyword,
 		)
 
 		stmts := type.body.derived.(^ast.Block_Stmt).stmts
@@ -254,21 +252,21 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 			}
 		}
 	case ^ast.Switch_Stmt:
-		write_pos(injections, type.switch_pos.offset, len("switch"), .KEYWORD)
+		write_pos(injections, type.switch_pos.offset, len("switch"), .Keyword)
 
 	case ^ast.Case_Clause:
-		write_pos(injections, type.case_pos.offset, len("case"), .KEYWORD)
+		write_pos(injections, type.case_pos.offset, len("case"), .Keyword)
 
 	case ^ast.Implicit:
 		// I don't really know what this is?
 		#partial switch type.tok.kind {
 		case .Context:
-			write_token(injections, type.tok, .KEYWORD)
+			write_token(injections, type.tok, .Keyword)
 		case:
 			unimplemented(fmt.aprint("'Implicit' type", type.tok.kind))
 		}
 	case ^ast.Implicit_Selector_Expr:
-		write_pos(injections, type.field.pos.offset, len(type.field.name), .CONSTANT)
+		write_pos(injections, type.field.pos.offset, len(type.field.name), .Constant)
 	case ^ast.Field:
 		for name in type.names {
 			if _, ok := name.derived.(^ast.Poly_Type); ok {
@@ -282,53 +280,53 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 		expr, call_purpose := extract_call(type.expr)
 		switch call_purpose {
 		case .Call:
-			write_node(injections, expr, .PROCEDURE)
+			write_node(injections, expr, .Procedure)
 		case .Cast:
 			write_type(injections, expr)
 		case .Directive:
-			write_node(injections, expr, .DIRECTIVE)
+			write_node(injections, expr, .Directive)
 		}
 	case ^ast.Comp_Lit:
 		if type.type != nil {
 			write_type(injections, type.type)
 		}
 	case ^ast.Basic_Directive:
-		write_pos(injections, type.tok.pos.offset, len(type.name) + 1, .DIRECTIVE)
+		write_pos(injections, type.tok.pos.offset, len(type.name) + 1, .Directive)
 	case ^ast.Ident:
 		switch type.name {
 		case "nil", "true", "false":
-			write_pos(injections, type.pos.offset, len(type.name), .KEYWORD)
+			write_pos(injections, type.pos.offset, len(type.name), .Keyword)
 		}
 	case ^ast.For_Stmt:
-		write_pos(injections, type.for_pos.offset, len("for"), .KEYWORD)
+		write_pos(injections, type.for_pos.offset, len("for"), .Keyword)
 	case ^ast.Range_Stmt:
-		write_pos(injections, type.for_pos.offset, len("for"), .KEYWORD)
-		write_pos(injections, type.in_pos.offset, len("in"), .KEYWORD)
+		write_pos(injections, type.for_pos.offset, len("for"), .Keyword)
+		write_pos(injections, type.in_pos.offset, len("in"), .Keyword)
 	case ^ast.Unroll_Range_Stmt:
-		write_pos(injections, type.unroll_pos.offset - 1, len("#unroll"), .KEYWORD)
-		write_pos(injections, type.for_pos.offset, len("for"), .KEYWORD)
-		write_pos(injections, type.in_pos.offset, len("in"), .KEYWORD)
+		write_pos(injections, type.unroll_pos.offset - 1, len("#unroll"), .Keyword)
+		write_pos(injections, type.for_pos.offset, len("for"), .Keyword)
+		write_pos(injections, type.in_pos.offset, len("in"), .Keyword)
 	case ^ast.Branch_Stmt:
-		write_token(injections, type.tok, .KEYWORD)
+		write_token(injections, type.tok, .Keyword)
 	case ^ast.Defer_Stmt:
-		write_pos(injections, type.pos.offset, len("defer"), .KEYWORD)
+		write_pos(injections, type.pos.offset, len("defer"), .Keyword)
 	case ^ast.Proc_Group:
-		write_token(injections, type.tok, .KEYWORD)
+		write_token(injections, type.tok, .Keyword)
 		for expr in type.args {
 			ident := expr.derived_expr.(^ast.Ident)
-			write_pos(injections, ident.pos.offset, len(ident.name), .PROCEDURE)
+			write_pos(injections, ident.pos.offset, len(ident.name), .Procedure)
 		}
 	case ^ast.Using_Stmt:
-		write_pos(injections, type.pos.offset, len("using"), .KEYWORD)
+		write_pos(injections, type.pos.offset, len("using"), .Keyword)
 	case ^ast.Attribute:
-		write_pos(injections, type.pos.offset, len("@"), .KEYWORD)
+		write_pos(injections, type.pos.offset, len("@"), .Keyword)
 		for elem in type.elems {
 			#partial switch t in elem.derived_expr {
 			case ^ast.Ident:
-				write_pos(injections, t.pos.offset, len(t.name), .KEYWORD)
+				write_pos(injections, t.pos.offset, len(t.name), .Keyword)
 			case ^ast.Field_Value:
 				ident := t.field.derived.(^ast.Ident)
-				write_pos(injections, ident.pos.offset, len(ident.name), .KEYWORD)
+				write_pos(injections, ident.pos.offset, len(ident.name), .Keyword)
 			case:
 				panic("Unreachable type in attribute element")
 			}
@@ -362,7 +360,8 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Matrix_Index_Expr,
 	     ^ast.Bit_Field_Type,
 	     ^ast.Bit_Field_Field,
-	     ^ast.Struct_Type:
+	     ^ast.Struct_Type,
+	     ^ast.Enum_Type:
 	// nothing here
 	case:
 		unimplemented(fmt.aprint("Node type", node.derived))
@@ -376,22 +375,22 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 	#partial switch t in expr.derived_expr {
 	case ^ast.Ident:
 		if is_builtin_type(t.name) {
-			write_pos(injections, t.pos.offset, len(t.name), .KEYWORD)
+			write_pos(injections, t.pos.offset, len(t.name), .Keyword)
 		} else {
-			write_pos(injections, t.pos.offset, len(t.name), .TYPE)
+			write_pos(injections, t.pos.offset, len(t.name), .Type)
 		}
 	case ^ast.Pointer_Type:
 		write_type(injections, t.elem)
 	case ^ast.Selector_Expr:
 		write_type(injections, t.field)
 	case ^ast.Dynamic_Array_Type:
-		write_pos(injections, t.dynamic_pos.offset, len("dynamic"), .KEYWORD)
+		write_pos(injections, t.dynamic_pos.offset, len("dynamic"), .Keyword)
 		write_type(injections, t.elem)
 	case ^ast.Distinct_Type:
-		write_pos(injections, t.pos.offset, len("distinct"), .KEYWORD)
+		write_pos(injections, t.pos.offset, len("distinct"), .Keyword)
 		write_type(injections, t.type)
 	case ^ast.Union_Type:
-		write_pos(injections, t.pos.offset, len("union"), .KEYWORD)
+		write_pos(injections, t.pos.offset, len("union"), .Keyword)
 		for variant in t.variants {
 			write_type(injections, variant)
 		}
@@ -403,11 +402,11 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 			}
 		}
 	case ^ast.Struct_Type:
-		write_pos(injections, t.pos.offset, len("struct"), .KEYWORD)
+		write_pos(injections, t.pos.offset, len("struct"), .Keyword)
 		for field in t.fields.list {
 			write_type(injections, field.type)
 			if field.tag != {} {
-				write_token(injections, field.tag, .STRING)
+				write_token(injections, field.tag, .String)
 			}
 		}
 		if t.poly_params != nil {
@@ -421,7 +420,7 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 			fmt.println(t.min_field_align.derived)
 		}
 	case ^ast.Map_Type:
-		write_pos(injections, t.tok_pos.offset, len("map"), .KEYWORD)
+		write_pos(injections, t.tok_pos.offset, len("map"), .Keyword)
 		write_type(injections, t.key)
 		write_type(injections, t.value)
 	case ^ast.Array_Type:
@@ -434,12 +433,12 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 	case ^ast.Ellipsis:
 		write_type(injections, t.expr)
 	case ^ast.Typeid_Type:
-		write_pos(injections, t.pos.offset, len("typeid"), .KEYWORD)
+		write_pos(injections, t.pos.offset, len("typeid"), .Keyword)
 		if t.specialization != nil {
 			write_type(injections, t.specialization)
 		}
 	case ^ast.Poly_Type:
-		write_pos(injections, t.dollar.offset, len(t.type.name) + 1, .TYPE)
+		write_pos(injections, t.dollar.offset, len(t.type.name) + 1, .Type)
 		if t.specialization != nil {
 			write_type(injections, t.specialization)
 		}
@@ -449,16 +448,16 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 			write_type(injections, arg)
 		}
 	case ^ast.Bit_Set_Type:
-		write_pos(injections, t.pos.offset, len("bit_set"), .KEYWORD)
+		write_pos(injections, t.pos.offset, len("bit_set"), .Keyword)
 	case ^ast.Bit_Field_Type:
-		write_pos(injections, t.pos.offset, len("bit_field"), .KEYWORD)
+		write_pos(injections, t.pos.offset, len("bit_field"), .Keyword)
 	case ^ast.Matrix_Type:
-		write_pos(injections, t.pos.offset, len("matrix"), .KEYWORD)
+		write_pos(injections, t.pos.offset, len("matrix"), .Keyword)
 		write_type(injections, t.elem)
 	case ^ast.Enum_Type:
-		write_pos(injections, t.pos.offset, len("enum"), .KEYWORD)
+		write_pos(injections, t.pos.offset, len("enum"), .Keyword)
 		for field in t.fields {
-			write_node(injections, field, .CONSTANT)
+			write_node(injections, field, .Constant)
 		}
 	case:
 		unimplemented(fmt.aprint("Type type", expr.derived))
