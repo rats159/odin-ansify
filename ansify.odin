@@ -16,8 +16,6 @@ Injection :: struct {
 	start: bool,
 }
 
-xx :: 10
-
 Type :: enum {
 	NONE,
 	KEYWORD,
