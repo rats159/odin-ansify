@@ -1,10 +1,11 @@
 package ansify
 
+import "core:flags"
 import "core:fmt"
 import "core:odin/ast"
 import "core:odin/parser"
 import "core:odin/tokenizer"
-import "core:os/os2"
+import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:text/regex"
@@ -40,17 +41,35 @@ colors := [Type]string {
 	.Directive = `[31m`, // Same as keywords, but you can change it if you want
 }
 
+Options :: struct {
+	input:     os.Handle `args:"pos=0,required,file=r" usage:"Input file."`,
+	output:    os.Handle `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
+	clipboard: bool `usage:"Whether to copy the output to the clipboard (Windows only)"`,
+}
+
 main :: proc() {
-	data :=
-		os2.read_entire_file(os2.args[1], context.allocator) or_else panic("Failed to read file")
+
+	opt: Options
+	style: flags.Parsing_Style = .Odin
+
+	flags.parse_or_exit(&opt, os.args, style)
+
+	when ODIN_OS != .Windows {
+		if opt.clipboard {
+			panic(
+				"Direct to clipboard is only supported on Windows. Consider piping stdout to your clipboard on other systems.",
+			)
+		}
+	}
+
+	data := os.read_entire_file(opt.input) or_else panic("Failed to read file")
 	text := string(data)
 
 	p := parser.default_parser()
-	f := ast.File {
-		fullpath = os2.args[1],
-		src      = text,
+	file := ast.File {
+		src = text,
 	}
-	ok := parser.parse_file(&p, &f)
+	ok := parser.parse_file(&p, &file)
 
 	if !ok {
 		panic("Invalid file contents")
@@ -65,8 +84,8 @@ main :: proc() {
 			return v
 		}, data = &injections}
 
-	ast.walk(v, f.pkg_decl)
-	for decl in f.decls {
+	ast.walk(v, file.pkg_decl)
+	for decl in file.decls {
 		ast.walk(v, decl)
 	}
 
@@ -81,6 +100,7 @@ main :: proc() {
 		regex.create_iterator(text, `\/\*(?:\s|\S)*?\*\/|\/\/[^\n]*`) or_else panic(
 			"regex creation failed",
 		)
+
 	for match, _ in regex.match_iterator(&secondary_matcher) {
 		append(&injections, Injection{type = .Keyword, at = match.pos[0][0], start = true})
 		append(&injections, Injection{type = .Keyword, at = match.pos[0][1], start = false})
@@ -134,7 +154,6 @@ main :: proc() {
 				}
 			}
 
-			//
 			if all_whitespace {
 				continue
 			}
@@ -161,7 +180,17 @@ main :: proc() {
 	}
 	strings.write_string(&builder, segments[len(segments) - 1])
 
-	fmt.println(strings.to_string(builder))
+	final_output := strings.to_string(builder)
+
+	if opt.output == 0 {
+		fmt.println(final_output)
+	} else {
+		os.write(opt.output, transmute([]u8)(final_output))
+	}
+
+	if opt.clipboard {
+		copy_to_clipboard(final_output)
+	}
 }
 
 parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
@@ -508,7 +537,7 @@ is_builtin_type :: proc(t: string) -> bool {
 		 "f64be", "f32be", "f16be",
 		 "f64le", "f32le", "f16le",
 	     "quaternion256", "quaternion128", "quaternion64",
-	     "complex128", "complex64", "complex32", 
+	     "complex128", "complex64", "complex32",
 	  	 "bool", "b64", "b32", "b16", "b8",
 	     "string", "cstring", "string16", "cstring16", "rune",
 		 "any", "rawptr", "uintptr",
@@ -533,4 +562,3 @@ write_token :: proc(injections: ^[dynamic]Injection, tk: tokenizer.Token, type: 
 	append(injections, Injection{tk.pos.offset, type, true})
 	append(injections, Injection{tk.pos.offset + len(tk.text), type, false})
 }
-
