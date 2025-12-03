@@ -161,7 +161,7 @@ main :: proc() {
 	}
 	strings.write_string(&builder, segments[len(segments) - 1])
 
-	_ = os2.write_entire_file("out.txt", transmute([]u8)(strings.to_string(builder)))
+	fmt.println(strings.to_string(builder))
 }
 
 parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
