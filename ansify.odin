@@ -10,6 +10,90 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 
+parser_error_handler :: proc(pos: tokenizer.Pos, msg: string, args: ..any) {
+	fmt.eprintf("%s(%d:%d): ", pos.file, pos.line, pos.column)
+	fmt.eprintf(msg, ..args)
+	fmt.eprintf("\n")
+	if strings.contains(msg, "package") {
+		fmt.eprintln("Did you mean to use `-partial`?")
+	}
+}
+
+// Doesnt report errors about file scope because `-partial` breaks the rules
+lenient_error_handler :: proc(pos: tokenizer.Pos, msg: string, args: ..any) {
+	if strings.contains(msg, "in the file scope") {
+		return
+	}
+	fmt.eprintf("!!!!%s(%d:%d): ", pos.file, pos.line, pos.column)
+	fmt.eprintf(msg, ..args)
+	fmt.eprintf("\n")
+	if strings.contains(msg, "package") {
+		fmt.eprintln("Did you mean to use `-partial`?")
+	}
+}
+
+// minor change from `core:odin/parser.parse_file`
+parse_partial :: proc(p: ^parser.Parser, file: ^ast.File) -> bool {
+	p.prev_tok = {}
+	p.curr_tok = {}
+	p.expr_level = 0
+	p.allow_range = false
+	p.allow_in_expr = false
+	p.in_foreign_block = false
+	p.allow_type = false
+	p.lead_comment = nil
+	p.line_comment = nil
+
+	p.tok.flags += {.Insert_Semicolon}
+
+	p.file = file
+	tokenizer.init(&p.tok, file.src, file.fullpath, p.err)
+	if p.tok.ch <= 0 {
+		return true
+	}
+
+
+	parser.advance_token(p)
+	parser.consume_comment_groups(p, p.prev_tok)
+
+	for p.curr_tok.kind != .EOF {
+		if p.curr_tok.kind == .Comment {
+			parser.consume_comment_groups(p, p.prev_tok)
+		} else if p.curr_tok.kind == .File_Tag {
+			append(&p.file.tags, p.curr_tok)
+			parser.advance_token(p)
+		} else {
+			break
+		}
+	}
+
+	if p.curr_tok.kind == .Package {
+		parser.error(p, p.curr_tok.pos, "Found a package declaration in a `-partial` parse")
+		return false
+	}
+
+	if p.file.syntax_error_count > 0 {
+		return false
+	}
+
+	p.file.decls = make([dynamic]^ast.Stmt)
+
+	for p.curr_tok.kind != .EOF {
+		stmt := parser.parse_stmt(p)
+		if stmt != nil {
+			if _, ok := stmt.derived.(^ast.Empty_Stmt); !ok {
+				append(&p.file.decls, stmt)
+				if es, es_ok := stmt.derived.(^ast.Expr_Stmt); es_ok && es.expr != nil {
+					if _, pl_ok := es.expr.derived.(^ast.Proc_Lit); pl_ok {
+						parser.error(p, stmt.pos, "procedure literal evaluated but not used")
+					}
+				}
+			}
+		}
+	}
+
+	return true
+}
 
 Injection :: struct {
 	at:    int,
@@ -45,10 +129,11 @@ colors := [Type]string {
 //[0m
 
 Options :: struct {
-	i:  os.Handle `args:"pos=0,file=r" usage:"Input file. Optional, reads from stdin if omitted"`,
-	o:  os.Handle `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
-	co: bool `usage:"Whether to copy the output to the clipboard (Windows only)"`,
-	ci: bool `usage:"Whether to copy the input from the clipboard (Windows only)"`,
+	i:       os.Handle `args:"pos=0,file=r" usage:"Input file. Optional, reads from stdin if omitted"`,
+	o:       os.Handle `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
+	co:      bool `usage:"Whether to copy the output to the clipboard (Windows only)"`,
+	ci:      bool `usage:"Whether to copy the input from the clipboard (Windows only)"`,
+	partial: bool `usage:"Parse single statement, rather than a full file"`,
 }
 
 main :: proc() {
@@ -97,13 +182,26 @@ main :: proc() {
 	assert(text != "")
 
 	p := parser.default_parser()
+	
+	if opt.partial {
+		p.err = lenient_error_handler
+	} else {
+		p.err = parser_error_handler
+	}
+	
 	file := ast.File {
 		src = text,
 	}
-	ok := parser.parse_file(&p, &file)
+	ok: bool
+	if opt.partial {
+		ok = parse_partial(&p, &file)
+	} else {
+		ok = parser.parse_file(&p, &file)
+	}
 
 	if !ok {
-		panic("Invalid file contents")
+		fmt.eprintln("Parser error")
+		os.exit(1)
 	}
 
 	injections: [dynamic]Injection
@@ -456,15 +554,21 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Struct_Type,
 	     ^ast.Enum_Type:
 	// nothing here
+	case ^ast.Bad_Stmt:
+		fmt.panicf(
+			"Unhandled parser error made it into highlighting. Between: %v:%v and %v:%v",
+			type.pos.line,
+			type.pos.column,
+			type.end.line,
+			type.end.column,
+		)
 	case:
 		unimplemented(fmt.aprint("Node type", node.derived))
 	}
 }
 
 write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #caller_location) {
-	if expr == nil {
-		fmt.println(loc)
-	}
+	assert(expr != nil, "Internal error: nil expression was passed to write_type")
 	#partial switch t in expr.derived_expr {
 	case ^ast.Ident:
 		if is_builtin_type(t.name) {
@@ -508,9 +612,6 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 					write_type(injections, name)
 				}
 			}
-		}
-		if t.min_field_align != nil {
-			fmt.println(t.min_field_align.derived)
 		}
 	case ^ast.Map_Type:
 		write_pos(injections, t.tok_pos.offset, len("map"), .Keyword)
