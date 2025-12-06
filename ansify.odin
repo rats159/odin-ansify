@@ -1,5 +1,6 @@
 package ansify
 
+import "base:runtime"
 import "core:flags"
 import "core:fmt"
 import "core:odin/ast"
@@ -8,7 +9,6 @@ import "core:odin/tokenizer"
 import "core:os"
 import "core:slice"
 import "core:strings"
-import "core:text/regex"
 
 
 Injection :: struct {
@@ -40,11 +40,15 @@ colors := [Type]string {
 	.Type      = `[33m`,
 	.Directive = `[31m`, // Same as keywords, but you can change it if you want
 }
+// printing this file turns the whole thing red because of the ansi codes
+// this resets it
+//[0m
 
 Options :: struct {
-	input:     os.Handle `args:"pos=0,required,file=r" usage:"Input file."`,
-	output:    os.Handle `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
-	clipboard: bool `usage:"Whether to copy the output to the clipboard (Windows only)"`,
+	i:  os.Handle `args:"pos=0,file=r" usage:"Input file. Optional, reads from stdin if omitted"`,
+	o:  os.Handle `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
+	co: bool `usage:"Whether to copy the output to the clipboard (Windows only)"`,
+	ci: bool `usage:"Whether to copy the input from the clipboard (Windows only)"`,
 }
 
 main :: proc() {
@@ -55,15 +59,42 @@ main :: proc() {
 	flags.parse_or_exit(&opt, os.args, style)
 
 	when ODIN_OS != .Windows {
-		if opt.clipboard {
+		if opt.ci {
 			panic(
 				"Direct to clipboard is only supported on Windows. Consider piping stdout to your clipboard on other systems.",
 			)
 		}
+
+		if opt.co {
+			panic("Direct from clipboard is only supported on Windows.")
+		}
 	}
 
-	data := os.read_entire_file(opt.input) or_else panic("Failed to read file")
-	text := string(data)
+	text: string
+
+	if opt.i != 0 {
+		data := os.read_entire_file(opt.i) or_else panic("Failed to read file")
+		text = string(data)
+		if len(text) == 0 {
+			fmt.eprintln("[ERROR] File has no text on it")
+			os.exit(1)
+		}
+	} else if opt.ci {
+		text = get_from_clipboard()
+		if len(text) == 0 {
+			fmt.eprintln("[ERROR] Clipboard has no text on it")
+			os.exit(1)
+		}
+	} else {
+		text = read_whole_stdin()
+		if len(text) == 0 {
+			fmt.eprintln("[ERROR] stdin is empty")
+			os.exit(1)
+		}
+
+	}
+
+	assert(text != "")
 
 	p := parser.default_parser()
 	file := ast.File {
@@ -189,15 +220,36 @@ main :: proc() {
 
 	final_output := strings.to_string(builder)
 
-	if opt.output == 0 {
+	if opt.o == 0 {
 		fmt.println(final_output)
 	} else {
-		os.write(opt.output, transmute([]u8)(final_output))
+		os.write(opt.o, transmute([]u8)(final_output))
 	}
 
-	if opt.clipboard {
+	if opt.co {
 		copy_to_clipboard(final_output)
 	}
+}
+
+// probably something in os for this, but read_entire_file stops after 8kb
+read_whole_stdin :: proc() -> string {
+	buffer := make([dynamic]byte, len = 0, cap = 4096)
+
+	for {
+		#no_bounds_check n, err := os.read(os.stdin, buffer[len(buffer):cap(buffer)])
+		if n == 0 || err == .BROKEN_PIPE do break
+		if err != nil {
+			panic("OS Error")
+		}
+
+		(^runtime.Raw_Dynamic_Array)(&buffer).len += n
+
+		if len(buffer) == cap(buffer) {
+			reserve(&buffer, cap(buffer) * 2)
+		}
+	}
+
+	return string(buffer[:])
 }
 
 parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
@@ -576,3 +628,4 @@ write_token :: proc(injections: ^[dynamic]Injection, tk: tokenizer.Token, type: 
 	append(injections, Injection{tk.pos.offset, type, true})
 	append(injections, Injection{tk.pos.offset + len(tk.text), type, false})
 }
+

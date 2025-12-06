@@ -1,5 +1,6 @@
 package ansify
 
+import "core:strings"
 import "core:mem"
 import "core:sys/windows"
 
@@ -13,4 +14,20 @@ copy_to_clipboard :: proc(data: string) {
 	([^]u8)(lock_data)[len(data)] = 0
 	windows.GlobalUnlock(windows.HGLOBAL(data_pointer))
 	windows.SetClipboardData(windows.CF_TEXT, windows.HANDLE(data_pointer))
+	windows.CloseClipboard()
+}
+
+get_from_clipboard :: proc() -> string {
+    windows.OpenClipboard(nil)
+    defer windows.CloseClipboard()
+    
+	data := windows.GetClipboardData(windows.CF_TEXT)
+	if data == nil {
+	    return ""
+	}
+	
+	lock := windows.GlobalLock(auto_cast data)
+	defer windows.GlobalUnlock(auto_cast data)
+	
+	return strings.clone(string(cstring(lock)))
 }
