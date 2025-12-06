@@ -182,13 +182,13 @@ main :: proc() {
 	assert(text != "")
 
 	p := parser.default_parser()
-	
+
 	if opt.partial {
 		p.err = lenient_error_handler
 	} else {
 		p.err = parser_error_handler
 	}
-	
+
 	file := ast.File {
 		src = text,
 	}
@@ -351,7 +351,7 @@ read_whole_stdin :: proc() -> string {
 }
 
 parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
-	#partial switch type in node.derived {
+	switch type in node.derived {
 	case ^ast.Package_Decl:
 		write_token(injections, type.token, .Keyword)
 	case ^ast.Import_Decl:
@@ -449,13 +449,7 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 		write_pos(injections, type.case_pos.offset, len("case"), .Keyword)
 
 	case ^ast.Implicit:
-		// I don't really know what this is?
-		#partial switch type.tok.kind {
-		case .Context:
-			write_token(injections, type.tok, .Keyword)
-		case:
-			unimplemented(fmt.aprint("'Implicit' type", type.tok.kind))
-		}
+		write_token(injections, type.tok, .Keyword)
 	case ^ast.Implicit_Selector_Expr:
 		write_pos(injections, type.field.pos.offset, len(type.field.name), .Constant)
 	case ^ast.Field:
@@ -469,6 +463,9 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 		}
 	case ^ast.Call_Expr:
 		expr, call_purpose := extract_call(type.expr)
+		if expr == nil {
+			break
+		}
 		switch call_purpose {
 		case .Call:
 			write_node(injections, expr, .Procedure)
@@ -522,6 +519,19 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 				panic("Unreachable type in attribute element")
 			}
 		}
+	case ^ast.Package:
+		write_pos(injections, type.pos.offset, len("package"), .Keyword)
+	case ^ast.Tag_Expr:
+		write_pos(injections, type.op.pos.offset, len(type.name) + 1, .Directive)
+	case ^ast.Tag_Stmt:
+		write_pos(injections, type.op.pos.offset, len(type.name) + 1, .Directive)
+	case ^ast.Helper_Type:
+		write_pos(injections, type.pos.offset, len("helper") + 1, .Directive)
+	case ^ast.Auto_Cast:
+		write_token(injections, type.op, .Keyword)
+	case ^ast.Inline_Asm_Expr:
+		// Inline ASM is weird right now, I don't think it's supported properly, but it's in the parser
+		write_token(injections, type.tok, .Keyword)
 	case ^ast.Block_Stmt,
 	     ^ast.Dynamic_Array_Type,
 	     ^ast.Proc_Type,
@@ -552,8 +562,13 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Bit_Field_Type,
 	     ^ast.Bit_Field_Field,
 	     ^ast.Struct_Type,
-	     ^ast.Enum_Type:
-	// nothing here
+	     ^ast.Enum_Type,
+	     ^ast.Selector_Call_Expr,
+	     ^ast.Multi_Pointer_Type,
+	     ^ast.Empty_Stmt:
+
+	case ^ast.File:
+		panic("An ast.File made it directly into parsing")
 	case ^ast.Bad_Stmt:
 		fmt.panicf(
 			"Unhandled parser error made it into highlighting. Between: %v:%v and %v:%v",
@@ -562,8 +577,26 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 			type.end.line,
 			type.end.column,
 		)
-	case:
-		unimplemented(fmt.aprint("Node type", node.derived))
+	case ^ast.Bad_Expr:
+		fmt.panicf(
+			"Unhandled parser error made it into highlighting. Between: %v:%v and %v:%v",
+			type.pos.line,
+			type.pos.column,
+			type.end.line,
+			type.end.column,
+		)
+	case ^ast.Bad_Decl:
+		fmt.panicf(
+			"Unhandled parser error made it into highlighting. Between: %v:%v and %v:%v",
+			type.pos.line,
+			type.pos.column,
+			type.end.line,
+			type.end.column,
+		)
+	case ^ast.Relative_Type:
+		panic("#relative types have been removed from the language")
+	case ^ast.Undef:
+		write_node(injections, type.node, .Keyword)
 	}
 }
 
@@ -577,6 +610,8 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 			write_pos(injections, t.pos.offset, len(t.name), .Type)
 		}
 	case ^ast.Pointer_Type:
+		write_type(injections, t.elem)
+	case ^ast.Multi_Pointer_Type:
 		write_type(injections, t.elem)
 	case ^ast.Selector_Expr:
 		write_type(injections, t.field)
@@ -683,9 +718,24 @@ extract_call :: proc(base: ^ast.Expr) -> (^ast.Expr, Call_Target) {
 		return base, .Call
 	case ^ast.Paren_Expr:
 		return extract_call(type.expr)
-	case ^ast.Pointer_Type:
+	case ^ast.Index_Expr:
+		return nil, .Call
+	case ^ast.Pointer_Type,
+	     ^ast.Multi_Pointer_Type,
+	     ^ast.Struct_Type,
+	     ^ast.Matrix_Type,
+	     ^ast.Array_Type,
+	     ^ast.Bit_Field_Type,
+	     ^ast.Map_Type,
+	     ^ast.Bit_Set_Type,
+	     ^ast.Poly_Type,
+	     ^ast.Enum_Type,
+	     ^ast.Union_Type,
+	     ^ast.Proc_Type,
+	     ^ast.Dynamic_Array_Type,
+	     ^ast.Distinct_Type:
 		return base, .Cast
-	case ^ast.Basic_Directive:
+	case ^ast.Basic_Directive, ^ast.Tag_Expr:
 		return base, .Directive
 	case:
 		unimplemented(fmt.aprint("Unimplemented call type", base.derived_expr))
