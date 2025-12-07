@@ -539,6 +539,8 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	case ^ast.Inline_Asm_Expr:
 		// Inline ASM is weird right now, I don't think it's supported properly, but it's in the parser
 		write_token(injections, type.tok, .Keyword)
+	case ^ast.Type_Cast:
+	    write_token(injections, type.tok, .Keyword)
 	case ^ast.Block_Stmt,
 	     ^ast.Dynamic_Array_Type,
 	     ^ast.Proc_Type,
@@ -553,7 +555,6 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Expr_Stmt,
 	     ^ast.Type_Assertion,
 	     ^ast.Slice_Expr,
-	     ^ast.Type_Cast,
 	     ^ast.Array_Type,
 	     ^ast.Field_Value,
 	     ^ast.Map_Type,
