@@ -129,16 +129,19 @@ colors := [Type]string {
 //[0m
 
 Options :: struct {
-	i:       os.Handle `args:"pos=0,file=r" usage:"Input file. Optional, reads from stdin if omitted"`,
-	o:       os.Handle `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
-	co:      bool `usage:"Whether to copy the output to the clipboard (Windows only)"`,
-	ci:      bool `usage:"Whether to copy the input from the clipboard (Windows only)"`,
-	partial: bool `usage:"Parse single statement, rather than a full file"`,
+	i:                   os.Handle `args:"pos=0,file=r" usage:"Input file. Optional, reads from stdin if omitted"`,
+	o:                   os.Handle `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
+	co:                  bool `usage:"Whether to copy the output to the clipboard (Windows only)"`,
+	ci:                  bool `usage:"Whether to copy the input from the clipboard (Windows only)"`,
+	partial:             bool `usage:"Parse single statement, rather than a full file"`,
+	quiet:               bool `usage:"Never print to stdout"`,
+	never_assume_cast:   bool `usage:"Always assume foo(bar) is a function"`,
+	no_keyword_builtins: bool `usage:"Don't give special highlighting to builtin types"`,
 }
 
-main :: proc() {
+opt: Options
 
-	opt: Options
+main :: proc() {
 	style: flags.Parsing_Style = .Odin
 
 	flags.parse_or_exit(&opt, os.args, style)
@@ -318,7 +321,7 @@ main :: proc() {
 
 	final_output := strings.to_string(builder)
 
-	if opt.o == 0 {
+	if opt.o == 0 && !opt.quiet {
 		fmt.println(final_output)
 	} else {
 		os.write(opt.o, transmute([]u8)(final_output))
@@ -470,7 +473,11 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 		case .Call:
 			write_node(injections, expr, .Procedure)
 		case .Cast:
-			write_type(injections, expr)
+			if opt.never_assume_cast {
+				write_node(injections, expr, .Procedure)
+			} else {
+				write_type(injections, expr)
+			}
 		case .Directive:
 			write_node(injections, expr, .Directive)
 		}
@@ -604,7 +611,7 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 	assert(expr != nil, "Internal error: nil expression was passed to write_type")
 	#partial switch t in expr.derived_expr {
 	case ^ast.Ident:
-		if is_builtin_type(t.name) {
+		if is_builtin_type(t.name) && !opt.no_keyword_builtins {
 			write_pos(injections, t.pos.offset, len(t.name), .Keyword)
 		} else {
 			write_pos(injections, t.pos.offset, len(t.name), .Type)
