@@ -540,12 +540,15 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 		// Inline ASM is weird right now, I don't think it's supported properly, but it's in the parser
 		write_token(injections, type.tok, .Keyword)
 	case ^ast.Type_Cast:
-	    write_token(injections, type.tok, .Keyword)
+		write_token(injections, type.tok, .Keyword)
 		write_type(injections, type.type)
+	case ^ast.Type_Assertion:
+		write_type(injections, type.type)
+
+	// Empty
+	case ^ast.Empty_Stmt:
+	// Thin wrappers over other nodes handled by the walker
 	case ^ast.Block_Stmt,
-	     ^ast.Dynamic_Array_Type,
-	     ^ast.Proc_Type,
-	     ^ast.Pointer_Type,
 	     ^ast.Field_List,
 	     ^ast.Selector_Expr,
 	     ^ast.Index_Expr,
@@ -553,28 +556,31 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Binary_Expr,
 	     ^ast.Paren_Expr,
 	     ^ast.Assign_Stmt,
-	     ^ast.Expr_Stmt,
-	     ^ast.Type_Assertion,
-	     ^ast.Slice_Expr,
-	     ^ast.Array_Type,
-	     ^ast.Field_Value,
-	     ^ast.Map_Type,
 	     ^ast.Ellipsis,
+	     ^ast.Expr_Stmt,
+	     ^ast.Slice_Expr,
+	     ^ast.Deref_Expr,
+	     ^ast.Matrix_Index_Expr,
+	     ^ast.Selector_Call_Expr:
+	// Types. Handled by write_type
+	case ^ast.Dynamic_Array_Type,
+	     ^ast.Proc_Type,
+	     ^ast.Pointer_Type,
+	     ^ast.Array_Type,
+	     ^ast.Map_Type,
 	     ^ast.Union_Type,
 	     ^ast.Distinct_Type,
 	     ^ast.Poly_Type,
 	     ^ast.Typeid_Type,
-	     ^ast.Deref_Expr,
 	     ^ast.Bit_Set_Type,
 	     ^ast.Matrix_Type,
-	     ^ast.Matrix_Index_Expr,
 	     ^ast.Bit_Field_Type,
-	     ^ast.Bit_Field_Field,
 	     ^ast.Struct_Type,
 	     ^ast.Enum_Type,
-	     ^ast.Selector_Call_Expr,
-	     ^ast.Multi_Pointer_Type,
-	     ^ast.Empty_Stmt:
+	     ^ast.Multi_Pointer_Type:
+
+	// Fields, handled by write_type
+	case ^ast.Field_Value, ^ast.Bit_Field_Field:
 
 	case ^ast.File:
 		panic("An ast.File made it directly into parsing")
@@ -699,6 +705,8 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 		}
 	case ^ast.Proc_Type:
 		write_pos(injections, t.pos.offset, len("proc"), .Keyword)
+	case ^ast.Unary_Expr:
+		assert(t.op.kind == .Question, ".? should be the only unary expr type")
 	case:
 		unimplemented(fmt.aprint("Type type", expr.derived))
 

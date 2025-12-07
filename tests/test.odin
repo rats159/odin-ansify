@@ -15,6 +15,8 @@ Type :: struct #align(16) {
 x := cast([dynamic]int)z
 x := transmute([dynamic]int)z
 
+x := y.([dynamic]int)
+
 Some_Const :: 10
 
 Foo :: enum {
