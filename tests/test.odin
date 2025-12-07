@@ -1,35 +1,23 @@
 package demo
 
-if x > 10 {}
+import "core:fmt"
+
 when x {
     if x do y
 } else when y {
     #partial switch f{}
 }
-
-
-X :: distinct Y
-
-y: int = ---
-
-z: [^]u8
-
-x := (struct{x,y: int})(foo)
-
-main :: proc(x: struct{foo:[dynamic]int}) where x > 10{
-    x := auto_cast y
+// Some comment
+Type :: struct #align(16) {
+    x,y: [dynamic]int
 }
 
-foo->bar()
+Some_Const :: 10
 
-// A COMMENT!
-/*BLOCK COMMENT!*/
-z :: struct #align(4) #max_field_align(4) #packed{
-
+Foo :: enum {
+    A, B, C
 }
 
-X :: struct {
-    f: proc "c" (x: struct{foo:[dynamic]int})
+main :: proc() {
+    fmt.println("Hi!")
 }
-
-funcs[1]()
