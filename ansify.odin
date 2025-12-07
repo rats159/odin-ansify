@@ -541,6 +541,7 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 		write_token(injections, type.tok, .Keyword)
 	case ^ast.Type_Cast:
 	    write_token(injections, type.tok, .Keyword)
+		write_type(injections, type.type)
 	case ^ast.Block_Stmt,
 	     ^ast.Dynamic_Array_Type,
 	     ^ast.Proc_Type,

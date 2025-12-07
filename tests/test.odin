@@ -12,8 +12,8 @@ Type :: struct #align(16) {
     x,y: [dynamic]int
 }
 
-x := cast(y)z
-x := transmute(y)z
+x := cast([dynamic]int)z
+x := transmute([dynamic]int)z
 
 Some_Const :: 10
 
