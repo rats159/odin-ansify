@@ -5,6 +5,7 @@ Usually used for discord highlighting, using the special `ansi` language. Unfort
 
 Usage:
 	`ansify.exe [i] [o] [-ci] [-co] [-never-assume-cast] [-no-keyword-builtins] [-partial] [-quiet]`
+	
 Flags:
 ```
 	-i:<Handle>           | Input file. Optional, reads from stdin if omitted
