@@ -32,6 +32,7 @@ main :: proc() {
 
 enum_array: [Foo]u8
 
+
 double :: proc(data: [$N]$T) -> [size_of([N]u8) * 2]T {
 	arr: [N * 2]T
 
@@ -41,5 +42,23 @@ double :: proc(data: [$N]$T) -> [size_of([N]u8) * 2]T {
 	}
 
 	return arr
+}
+
+
+Size :: size_of(struct {
+		a, b: [dynamic]int,
+	})
+
+Integer :: i64
+
+types_as_values :: proc() {
+	x := new(int)
+	y := make([]i32)
+	z := new([10 + Size]int)
+
+	foo := typeid_of(struct {
+			x: int,
+			y: int,
+		})
 }
 

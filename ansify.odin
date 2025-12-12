@@ -1,5 +1,8 @@
 package ansify
 
+import "core:reflect"
+import "base:intrinsics"
+import "core:mem"
 import "base:runtime"
 import "core:flags"
 import "core:fmt"
@@ -385,6 +388,13 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 			case ^ast.Struct_Type, ^ast.Enum_Type, ^ast.Union_Type, ^ast.Distinct_Type:
 				write_type(injections, type.values[0])
 				write_node(injections, name, .Type)
+			case ^ast.Ident:
+				// This is imperfect, but impossible without another full
+				//   process of the AST
+				write_node(injections, name, .Type)
+				if is_builtin_type(t2.name) {
+					write_type(injections, type.values[0])
+				}
 			case:
 				if !type.is_mutable {
 					write_node(injections, name, .Constant)
@@ -562,7 +572,8 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Deref_Expr,
 	     ^ast.Matrix_Index_Expr,
 	     ^ast.Selector_Call_Expr:
-	// Types. Handled by write_type
+	// Types. This sometimes results in duplicated injections, 
+	//  but the optimizer removes them
 	case ^ast.Dynamic_Array_Type,
 	     ^ast.Proc_Type,
 	     ^ast.Pointer_Type,
@@ -578,6 +589,12 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Struct_Type,
 	     ^ast.Enum_Type,
 	     ^ast.Multi_Pointer_Type:
+		expr: ast.Expr
+		expr.expr_base = node^
+		mem.copy(&expr.derived_expr, &node.derived, intrinsics.type_union_tag_offset(type_of(expr.derived_expr)))
+		reflect.set_union_variant_typeid(expr.derived_expr, reflect.union_variant_typeid(node.derived))
+		
+		write_type(injections, &expr)
 
 	// Fields, handled by write_type
 	case ^ast.Field_Value, ^ast.Bit_Field_Field:
