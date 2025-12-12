@@ -670,8 +670,20 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 	case ^ast.Array_Type:
 		write_type(injections, t.elem)
 		if t.len != nil {
-			if _, ok := t.len.derived_expr.(^ast.Ident); ok {
+			#partial switch length_type in t.len.derived_expr {
+			case ^ast.Ident:
 				write_type(injections, t.len)
+			case ^ast.Poly_Type:
+				write_node(injections, t.len, .Constant)
+			case ^ast.Binary_Expr:
+				// identifier in binary expr in array length is a constant, e.g. [SIZE + 10]int
+				if const, ok := length_type.left.derived.(^ast.Ident); ok {
+					write_node(injections, const, .Constant)
+				}
+
+				if const, ok := length_type.right.derived.(^ast.Ident); ok {
+					write_node(injections, const, .Constant)
+				}
 			}
 		}
 	case ^ast.Ellipsis:
