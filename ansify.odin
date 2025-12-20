@@ -335,25 +335,46 @@ main :: proc() {
 	}
 }
 
-// probably something in os for this, but read_entire_file stops after 8kb
-read_whole_stdin :: proc() -> string {
-	buffer := make([dynamic]byte, len = 0, cap = 4096)
+when ODIN_OS == .Windows {
+	read_whole_stdin :: proc() -> string {
+		buffer := make([dynamic]byte, len = 0, cap = 4096)
 
-	for {
-		#no_bounds_check n, err := os.read(os.stdin, buffer[len(buffer):cap(buffer)])
-		if n == 0 || err == .BROKEN_PIPE do break
-		if err != nil {
-			panic("OS Error")
+		for {
+			#no_bounds_check n, err := os.read(os.stdin, buffer[len(buffer):cap(buffer)])
+			if n == 0 || err == .BROKEN_PIPE do break
+			if err != nil {
+				panic("OS Error")
+			}
+
+			(^runtime.Raw_Dynamic_Array)(&buffer).len += n
+
+			if len(buffer) == cap(buffer) {
+				reserve(&buffer, cap(buffer) * 2)
+			}
 		}
 
-		(^runtime.Raw_Dynamic_Array)(&buffer).len += n
-
-		if len(buffer) == cap(buffer) {
-			reserve(&buffer, cap(buffer) * 2)
-		}
+		return string(buffer[:])
 	}
+} else {
+	read_whole_stdin :: proc() -> string {
+		buffer := make([dynamic]byte, len = 0, cap = 4096)
 
-	return string(buffer[:])
+		for {
+			#no_bounds_check n, err := os.read(os.stdin, buffer[len(buffer):cap(buffer)])
+			if n == 0 do break
+			if err != nil {
+				panic("OS Error")
+			}
+
+			(^runtime.Raw_Dynamic_Array)(&buffer).len += n
+
+			if len(buffer) == cap(buffer) {
+				reserve(&buffer, cap(buffer) * 2)
+			}
+		}
+
+		return string(buffer[:])
+	}
 }
 
 parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
