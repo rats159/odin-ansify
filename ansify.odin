@@ -1,15 +1,15 @@
 package ansify
 
-import "core:reflect"
 import "base:intrinsics"
-import "core:mem"
 import "base:runtime"
 import "core:flags"
 import "core:fmt"
+import "core:mem"
 import "core:odin/ast"
 import "core:odin/parser"
 import "core:odin/tokenizer"
 import "core:os"
+import "core:reflect"
 import "core:slice"
 import "core:strings"
 
@@ -71,7 +71,6 @@ parse_partial :: proc(p: ^parser.Parser, file: ^ast.File) -> bool {
 	}
 
 	if p.curr_tok.kind == .Package {
-		return false
 		parser.advance_token(p) // package
 		parser.advance_token(p) // name
 	}
@@ -195,7 +194,7 @@ main :: proc() {
 	file := ast.File {
 		src = text,
 	}
-	
+
 	ok := parse_partial(&p, &file)
 
 	if !ok {
@@ -309,11 +308,11 @@ main :: proc() {
 	assert(len(segments) == len(optimized_injections) + 1)
 
 	builder: strings.Builder
-	
+
 	if opt.discord {
 		strings.write_string(&builder, "```ansi\n")
 	}
-	
+
 	for i in 0 ..< len(optimized_injections) {
 		strings.write_string(&builder, segments[i])
 		fmt.sbprint(&builder, colors[optimized_injections[i].type])
@@ -323,7 +322,7 @@ main :: proc() {
 	if opt.discord {
 		strings.write_string(&builder, "\n```")
 	}
-	
+
 	final_output := strings.to_string(builder)
 
 	if opt.o == 0 && !opt.quiet {
@@ -335,7 +334,7 @@ main :: proc() {
 	if len(final_output) > 2000 && opt.discord {
 		fmt.eprintln("[WARN] Output over 2000 characters")
 	}
-	
+
 	if opt.co {
 		copy_to_clipboard(final_output)
 	}
@@ -599,7 +598,7 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Deref_Expr,
 	     ^ast.Matrix_Index_Expr,
 	     ^ast.Selector_Call_Expr:
-	// Types. This sometimes results in duplicated injections, 
+	// Types. This sometimes results in duplicated injections,
 	//  but the optimizer removes them
 	case ^ast.Dynamic_Array_Type,
 	     ^ast.Proc_Type,
@@ -618,9 +617,16 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Multi_Pointer_Type:
 		expr: ast.Expr
 		expr.expr_base = node^
-		mem.copy(&expr.derived_expr, &node.derived, intrinsics.type_union_tag_offset(type_of(expr.derived_expr)))
-		reflect.set_union_variant_typeid(expr.derived_expr, reflect.union_variant_typeid(node.derived))
-		
+		mem.copy(
+			&expr.derived_expr,
+			&node.derived,
+			intrinsics.type_union_tag_offset(type_of(expr.derived_expr)),
+		)
+		reflect.set_union_variant_typeid(
+			expr.derived_expr,
+			reflect.union_variant_typeid(node.derived),
+		)
+
 		write_type(injections, &expr)
 
 	// Fields, handled by write_type
