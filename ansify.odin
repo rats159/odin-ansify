@@ -27,7 +27,7 @@ lenient_error_handler :: proc(pos: tokenizer.Pos, msg: string, args: ..any) {
 	if strings.contains(msg, "in the file scope") {
 		return
 	}
-	fmt.eprintf("!!!!%s(%d:%d): ", pos.file, pos.line, pos.column)
+	fmt.eprintf("%s(%d:%d): ", pos.file, pos.line, pos.column)
 	fmt.eprintf(msg, ..args)
 	fmt.eprintf("\n")
 	if strings.contains(msg, "package") {
@@ -140,6 +140,7 @@ Options :: struct {
 	quiet:               bool `usage:"Never print to stdout"`,
 	never_assume_cast:   bool `usage:"Always assume foo(bar) is a function"`,
 	no_keyword_builtins: bool `usage:"Don't give special highlighting to builtin types"`,
+	discord:             bool `usage:"Wrap output in a discord codeblock. Warns to stderr if output is over 2000 chars"`,
 }
 
 opt: Options
@@ -316,12 +317,21 @@ main :: proc() {
 	assert(len(segments) == len(optimized_injections) + 1)
 
 	builder: strings.Builder
+	
+	if opt.discord {
+		strings.write_string(&builder, "```ansi\n")
+	}
+	
 	for i in 0 ..< len(optimized_injections) {
 		strings.write_string(&builder, segments[i])
 		fmt.sbprint(&builder, colors[optimized_injections[i].type])
 	}
 	strings.write_string(&builder, segments[len(segments) - 1])
 
+	if opt.discord {
+		strings.write_string(&builder, "\n```")
+	}
+	
 	final_output := strings.to_string(builder)
 
 	if opt.o == 0 && !opt.quiet {
@@ -330,6 +340,10 @@ main :: proc() {
 		os.write(opt.o, transmute([]u8)(final_output))
 	}
 
+	if len(final_output) > 2000 && opt.discord {
+		fmt.eprintln("[WARN] Output over 2000 characters")
+	}
+	
 	if opt.co {
 		copy_to_clipboard(final_output)
 	}
