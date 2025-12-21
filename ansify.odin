@@ -71,8 +71,9 @@ parse_partial :: proc(p: ^parser.Parser, file: ^ast.File) -> bool {
 	}
 
 	if p.curr_tok.kind == .Package {
-		parser.error(p, p.curr_tok.pos, "Found a package declaration in a `-partial` parse")
 		return false
+		parser.advance_token(p) // package
+		parser.advance_token(p) // name
 	}
 
 	if p.file.syntax_error_count > 0 {
@@ -136,7 +137,6 @@ Options :: struct {
 	o:                   os.Handle `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
 	co:                  bool `usage:"Whether to copy the output to the clipboard (Windows only)"`,
 	ci:                  bool `usage:"Whether to copy the input from the clipboard (Windows only)"`,
-	partial:             bool `usage:"Parse single statement, rather than a full file"`,
 	quiet:               bool `usage:"Never print to stdout"`,
 	never_assume_cast:   bool `usage:"Always assume foo(bar) is a function"`,
 	no_keyword_builtins: bool `usage:"Don't give special highlighting to builtin types"`,
@@ -190,21 +190,13 @@ main :: proc() {
 
 	p := parser.default_parser()
 
-	if opt.partial {
-		p.err = lenient_error_handler
-	} else {
-		p.err = parser_error_handler
-	}
+	p.err = lenient_error_handler
 
 	file := ast.File {
 		src = text,
 	}
-	ok: bool
-	if opt.partial {
-		ok = parse_partial(&p, &file)
-	} else {
-		ok = parser.parse_file(&p, &file)
-	}
+	
+	ok := parse_partial(&p, &file)
 
 	if !ok {
 		fmt.eprintln("Parser error")
@@ -236,7 +228,7 @@ main :: proc() {
 			break
 		}
 		#partial switch tk.kind {
-		case .Else, .Do:
+		case .Else, .Do, .Package:
 			write_token(&injections, tk, .Keyword)
 		case .Comment:
 			write_token(&injections, tk, .Comment)
