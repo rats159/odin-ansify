@@ -457,6 +457,9 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	case ^ast.When_Stmt:
 		write_pos(injections, type.when_pos.offset, len("when"), .Keyword)
 	case ^ast.Ternary_If_Expr:
+		if type.op1.kind == .Question {
+			break
+		}
 		write_token(injections, type.op1, .Keyword)
 		write_token(injections, type.op2, .Keyword)
 
