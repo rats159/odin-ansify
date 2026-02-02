@@ -789,6 +789,8 @@ extract_call :: proc(base: ^ast.Expr) -> (^ast.Expr, Call_Target) {
 	#partial switch type in base.derived_expr {
 	case ^ast.Selector_Expr:
 		return extract_call(type.field)
+	case ^ast.Call_Expr:
+		return extract_call(type.expr)
 	case ^ast.Ident:
 		// Capitals are probably a type?
 		if type.name[0] >= 'A' && type.name[0] <= 'Z' {
