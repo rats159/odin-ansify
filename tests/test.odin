@@ -1,3 +1,4 @@
+#+ignore
 package demo
 
 import "core:fmt"
@@ -11,6 +12,13 @@ when x {
 Type :: struct #align (16) {
 	x, y: [dynamic]int,
 }
+Numbers :: union {
+  i8, i16, i32, i64, i128,
+  u8, u16, u32, u64, u128
+}
+
+Foo :: [4]int{1,2,3,4}
+FCD :: [dynamic; 64 * len(Foo)]int
 
 x := cast([dynamic]int)z
 x := transmute([dynamic]int)z

@@ -617,7 +617,8 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Bit_Field_Type,
 	     ^ast.Struct_Type,
 	     ^ast.Enum_Type,
-	     ^ast.Multi_Pointer_Type:
+	     ^ast.Multi_Pointer_Type,
+	     ^ast.Fixed_Capacity_Dynamic_Array_Type:
 		expr: ast.Expr
 		expr.expr_base = node^
 		mem.copy(
@@ -685,6 +686,10 @@ write_type :: proc(injections: ^[dynamic]Injection, expr: ^ast.Expr, loc := #cal
 		write_type(injections, t.field)
 	case ^ast.Dynamic_Array_Type:
 		write_pos(injections, t.dynamic_pos.offset, len("dynamic"), .Keyword)
+		write_type(injections, t.elem)
+	case ^ast.Fixed_Capacity_Dynamic_Array_Type:
+		write_pos(injections, t.dynamic_pos.offset, len("dynamic"), .Keyword)
+		parse_node(injections, t.capacity)
 		write_type(injections, t.elem)
 	case ^ast.Distinct_Type:
 		write_pos(injections, t.pos.offset, len("distinct"), .Keyword)
