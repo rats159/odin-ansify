@@ -161,6 +161,13 @@ main :: proc() {
 		}
 	}
 
+	// Recently, changed ansi highlighting
+	//  the dark color is now fully black,
+	//  and hard to read
+	if opt.discord {
+	    colors[.Comment] = colors[.None]
+	}
+
 	text: string
 
 	if opt.i != nil {
