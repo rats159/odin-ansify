@@ -132,8 +132,8 @@ colors := [Type]string {
 //[0m
 
 Options :: struct {
-	i:                   os.Handle `args:"pos=0,file=r" usage:"Input file. Optional, reads from stdin if omitted"`,
-	o:                   os.Handle `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
+	i:                   ^os.File `args:"pos=0,file=r" usage:"Input file. Optional, reads from stdin if omitted"`,
+	o:                   ^os.File `args:"pos=1,file=cw" usage:"Output file. Optional, dumps to stdout if omitted"`,
 	co:                  bool `usage:"Whether to copy the output to the clipboard (Windows only)"`,
 	ci:                  bool `usage:"Whether to copy the input from the clipboard (Windows only)"`,
 	quiet:               bool `usage:"Never print to stdout"`,
@@ -163,8 +163,8 @@ main :: proc() {
 
 	text: string
 
-	if opt.i != 0 {
-		data := os.read_entire_file(opt.i) or_else panic("Failed to read file")
+	if opt.i != nil {
+		data := os.read_entire_file(opt.i, context.allocator) or_else panic("Failed to read file")
 		text = string(data)
 		if len(text) == 0 {
 			fmt.eprintln("[ERROR] File has no text on it")
@@ -325,7 +325,7 @@ main :: proc() {
 
 	final_output := strings.to_string(builder)
 
-	if opt.o == 0 && !opt.quiet {
+	if opt.o == nil && !opt.quiet {
 		fmt.println(final_output)
 	} else {
 		os.write(opt.o, transmute([]u8)(final_output))
