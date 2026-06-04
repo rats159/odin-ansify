@@ -20,6 +20,26 @@ Numbers :: union {
 Foo :: [4]int{1,2,3,4}
 FCD :: [dynamic; 64 * len(Foo)]int
 
+ValueType :: enum {
+    sstring,
+    serror,
+    integer,
+    bstring,
+    nullbstring,
+    arr,
+    boolean,
+}
+
+Value :: struct {
+  using _: struct #raw_union {
+    sstring: string,
+    serror: Your_Serror_Type,
+    integer: int,
+    // etc
+  },
+  type: ValueType,
+} Value;
+
 x := cast([dynamic]int)z
 x := transmute([dynamic]int)z
 

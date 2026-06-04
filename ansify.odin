@@ -227,7 +227,7 @@ main :: proc() {
 			break
 		}
 		#partial switch tk.kind {
-		case .Else, .Do, .Package:
+		case .Else, .Do, .Package, .Using:
 			write_token(&injections, tk, .Keyword)
 		case .Comment:
 			write_token(&injections, tk, .Comment)
