@@ -584,6 +584,11 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	case ^ast.Type_Assertion:
 		write_type(injections, type.type)
 
+	case ^ast.Binary_Expr:
+		#partial switch type.op.kind {
+		case .In, .Not_In:
+			write_token(injections, type.op, .Keyword)
+		}
 	// Empty
 	case ^ast.Empty_Stmt:
 	// Thin wrappers over other nodes handled by the walker
@@ -592,7 +597,6 @@ parse_node :: proc(injections: ^[dynamic]Injection, node: ^ast.Node) {
 	     ^ast.Selector_Expr,
 	     ^ast.Index_Expr,
 	     ^ast.Unary_Expr,
-	     ^ast.Binary_Expr,
 	     ^ast.Paren_Expr,
 	     ^ast.Assign_Stmt,
 	     ^ast.Ellipsis,
@@ -794,6 +798,8 @@ extract_call :: proc(base: ^ast.Expr) -> (^ast.Expr, Call_Target) {
 	#partial switch type in base.derived_expr {
 	case ^ast.Selector_Expr:
 		return extract_call(type.field)
+	case ^ast.Call_Expr:
+		return extract_call(type.expr)
 	case ^ast.Ident:
 		// Capitals are probably a type?
 		if type.name[0] >= 'A' && type.name[0] <= 'Z' {
